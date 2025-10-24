@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://thymeleaf.org">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Gestión de Servicios</title>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+	<link rel="stylesheet" th:href="@{/assets/css/servicio.css}" />
+</head>
+
+<body>
+	<h1><i class="fas fa-spa"></i> Gestión de Servicios <i class="fas fa-spa"></i></h1>
+
+	<div class="container">
+		<div class="header">
+			<button class="btn-agregar" onclick="toggleForm()">
+				<i class="fas fa-plus"></i> Nuevo Servicio
+			</button>
+
+			<div class="search-container">
+				<i class="fas fa-search"></i>
+				<input type="text" id="buscar" placeholder="Buscar servicios..." onkeyup="filtrarServicios()" />
+			</div>
+		</div>
+
+		<div class="stats">
+			<div class="stat-card">
+				<h3 id="total-servicios">0</h3>
+				<p>Total de Servicios</p>
+			</div>
+		</div>
+
+		<div class="formulario" id="formulario">
+			<div class="form-header">
+				<h2 id="titulo-formulario">Agregar Nuevo Servicio</h2>
+				<button class="close-btn" onclick="toggleForm()">
+					<i class="fas fa-times"></i>
+				</button>
+			</div>
+
+			<div class="form-group">
+				<label for="nombre">Nombre del servicio</label>
+				<input type="text" id="nombre" placeholder="Ej: Manicure Deluxe" />
+			</div>
+
+			<div class="form-group">
+				<label for="descripcion">Descripción</label>
+				<textarea id="descripcion" placeholder="Describe el servicio..."></textarea>
+			</div>
+
+			<div class="form-group">
+				<label for="precio">Precio</label>
+				<input type="number" id="precio" placeholder="0.00" min="0" step="0.01" />
+			</div>
+
+			<div class="form-group">
+				<label for="duracion">Duración (minutos)</label>
+				<input type="number" id="duracion" placeholder="60" min="1" />
+			</div>
+
+			<div class="form-buttons">
+				<button class="btn-cancelar" onclick="toggleForm()">
+					<i class="fas fa-times"></i> Cancelar
+				</button>
+				<button class="btn-guardar" onclick="guardarServicio()">
+					<i class="fas fa-save"></i> Guardar Servicio
+				</button>
+			</div>
+		</div>
+
+		<table id="tablaServicios">
+			<thead>
+				<tr>
+					<td>ID</td>
+					<td>Nombre</td>
+					<td>Descripción</td>
+					<td>Precio</td>
+					<td>Duración</td>
+					<td>Acciones</td>
+				</tr>
+			</thead>
+			<tbody id="cuerpo-tabla"></tbody>
+		</table>
+
+		<div id="estado-vacio" class="empty-state" style="display: none">
+			<i class="fas fa-clipboard-list"></i>
+			<h3>No hay servicios registrados</h3>
+			<p>Agrega tu primer servicio para comenzar</p>
+		</div>
+	</div>
+
+	<div class="toast" id="toast">
+		<i class="fas fa-check-circle"></i>
+		<span id="toast-mensaje">Servicio guardado correctamente</span>
+	</div>
+
+	<script>
+		const API_URL = "http://localhost:56446/api/servicios";
+		let servicios = [];
+		let servicioEditando = null;
+
+		document.addEventListener("DOMContentLoaded", () => {
+			cargarServicios();
+		});
+
+		async function cargarServicios() {
+			try {
+				const res = await fetch(API_URL);
+				if (!res.ok) throw new Error("Error al cargar servicios");
+				servicios = await res.json();
+				actualizarTabla();
+				actualizarEstadisticas();
+			} catch (error) {
+				console.error(error);
+				mostrarToast("Error al cargar los servicios", "error");
+			}
+		}
+
+		function toggleForm(modo = "nuevo") {
+			const form = document.getElementById("formulario");
+			const tituloForm = document.getElementById("titulo-formulario");
+
+			if (form.style.display === "flex") {
+				form.style.display = "none";
+				limpiarFormulario();
+				servicioEditando = null;
+			} else {
+				form.style.display = "flex";
+				tituloForm.textContent = modo === "editar" ? "Editar Servicio" : "Agregar Nuevo Servicio";
+			}
+		}
+
+		function limpiarFormulario() {
+			document.getElementById("nombre").value = "";
+			document.getElementById("descripcion").value = "";
+			document.getElementById("precio").value = "";
+			document.getElementById("duracion").value = "";
+		}
+
+		async function guardarServicio() {
+			const nombre = document.getElementById("nombre").value.trim();
+			const descripcion = document.getElementById("descripcion").value.trim();
+			const precio = parseFloat(document.getElementById("precio").value);
+			const duracion = parseInt(document.getElementById("duracion").value);
+
+			if (!nombre || isNaN(precio) || isNaN(duracion)) {
+				mostrarToast("Por favor completa todos los campos correctamente", "error");
+				return;
+			}
+
+			const servicioData = {nombre, descripcion, precio, duracion};
+
+			try {
+				let res;
+				if (servicioEditando) {
+					res = await fetch(`${API_URL}/${servicioEditando.id}`, {
+						method: "PUT",
+						headers: {"Content-Type": "application/json"},
+						body: JSON.stringify(servicioData),
+					});
+				} else {
+					res = await fetch(API_URL, {
+						method: "POST",
+						headers: {"Content-Type": "application/json"},
+						body: JSON.stringify(servicioData),
+					});
+				}
+
+				if (!res.ok) throw new Error("Error al guardar servicio");
+
+				mostrarToast(servicioEditando ? "Servicio actualizado" : "Servicio agregado");
+				toggleForm();
+				cargarServicios();
+			} catch (error) {
+				console.error(error);
+				mostrarToast("Error al guardar el servicio", "error");
+			}
+		}
+
+		function editarServicio(id) {
+			servicioEditando = servicios.find(s => s.id === id);
+			if (servicioEditando) {
+				document.getElementById("nombre").value = servicioEditando.nombre;
+				document.getElementById("descripcion").value = servicioEditando.descripcion;
+				document.getElementById("precio").value = servicioEditando.precio;
+				document.getElementById("duracion").value = servicioEditando.duracion;
+				toggleForm("editar");
+			}
+		}
+
+		async function eliminarServicio(id) {
+			if (!confirm("¿Deseas eliminar este servicio?")) return;
+
+			try {
+				const res = await fetch(`${API_URL}/${id}`, {method: "DELETE"});
+				if (!res.ok) throw new Error("Error al eliminar servicio");
+
+				mostrarToast("Servicio eliminado correctamente");
+				cargarServicios();
+			} catch (error) {
+				console.error(error);
+				mostrarToast("Error al eliminar servicio", "error");
+			}
+		}
+
+		function actualizarTabla() {
+			const cuerpoTabla = document.getElementById("cuerpo-tabla");
+			const estadoVacio = document.getElementById("estado-vacio");
+
+			if (servicios.length === 0) {
+				cuerpoTabla.innerHTML = "";
+				estadoVacio.style.display = "block";
+				return;
+			}
+
+			estadoVacio.style.display = "none";
+			cuerpoTabla.innerHTML = servicios
+				.map(s => `
+                    <tr>
+                        <td>${s.id}</td>
+                        <td>${s.nombre}</td>
+                        <td>${s.descripcion}</td>
+                        <td>${new Intl.NumberFormat('es-CO', {style: 'currency', currency: 'COP'}).format(s.precio)}</td>
+                        <td>${s.duracion} min</td>
+                        <td class="acciones">
+                            <button class="btn-editar" onclick="editarServicio(${s.id})">
+                                <i class="fas fa-edit"></i> Editar
+                            </button>
+                            <button class="btn-eliminar" onclick="eliminarServicio(${s.id})">
+                                <i class="fas fa-trash"></i> Eliminar
+                            </button>
+                        </td>
+                    </tr>
+                `)
+				.join("");
+		}
+
+		function actualizarEstadisticas() {
+			document.getElementById("total-servicios").textContent = servicios.length;
+		}
+
+		function filtrarServicios() {
+			const texto = document.getElementById("buscar").value.toLowerCase();
+			const filas = document.querySelectorAll("#cuerpo-tabla tr");
+
+			filas.forEach(fila => {
+				fila.style.display = fila.textContent.toLowerCase().includes(texto) ? "" : "none";
+			});
+		}
+
+		function mostrarToast(mensaje, tipo = "exito") {
+			const toast = document.getElementById("toast");
+			const toastMensaje = document.getElementById("toast-mensaje");
+
+			toastMensaje.textContent = mensaje;
+			toast.style.backgroundColor = tipo === "error" ? "#ff4e4e" : "var(--fucsia)";
+			toast.classList.add("show");
+			setTimeout(() => toast.classList.remove("show"), 3000);
+		}
+	</script>
+</body>
+
+</html>
